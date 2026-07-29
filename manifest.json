@@ -1,0 +1,45 @@
+{
+  "name": "Device Lifecycle Automation",
+  "version": "1.0.0",
+  "generated": "2026-07-28",
+  "target": "Windows PowerShell 5.1 / Microsoft Entra Connect Sync",
+  "defaultMode": "ReportOnly",
+  "files": {
+    "DeviceLifecycle.Config.psd1": {
+      "bytes": 1983,
+      "sha256": "7904d46077439b4f9745cae60b6061d4a656db34d07a3a9532c745d4f160f382"
+    },
+    "DeviceLifecycle.Helpers.psm1": {
+      "bytes": 0,
+      "sha256": "REPLACE"
+    },
+    "Initialize-DeviceLifecycle.ps1": {
+      "bytes": 4376,
+      "sha256": "dd8c3460daacd050470623805807f09468d2a4d99723d3f88e8c8a2bb53b3711"
+    },
+    "Install-DeviceLifecycleTask.ps1": {
+      "bytes": 2995,
+      "sha256": "f9f2d8f595409a6d7c218cb4753f39c4f6807343ad187ba8b41705ba7f0b565c"
+    },
+    "Invoke-DeviceLifecycle.ps1": {
+      "bytes": 41345,
+      "sha256": "47b04783014956d614694ef7b178e4451fe00e6223d3f53441b2ff1b286ae82a"
+    },
+    "README.md": {
+      "bytes": 7168,
+      "sha256": "13305921cc028f1daa3991a1a503a4e1a50ae15385e29122dfc5054849d029f5"
+    },
+    "Restore-QuarantinedDevice.ps1": {
+      "bytes": 3402,
+      "sha256": "9b445fcfdd48b037b0f59d2226d63e3a9ebe609861231550dc3b72d020e178e2"
+    },
+    "Test-DeviceLifecycle.ps1": {
+      "bytes": 4983,
+      "sha256": "8ff64645b8cb9178aedde72428aeac64a2e9a6bc432e2f95bdf159c71443f4b2"
+    },
+    "Uninstall-DeviceLifecycle.ps1": {
+      "bytes": 0,
+      "sha256": "REPLACE"
+    }
+  }
+}
