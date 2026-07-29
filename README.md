@@ -331,3 +331,32 @@ Ele remove por fases:
   para fora da OU antes de tentar removê-la.
 - **O script requer execução como administrador** e acesso ao módulo
   `ActiveDirectory` para a limpeza AD.
+
+## Extensão opcional: DeviceLifecycle-API
+
+Este repositório possui uma extensão HTTP opcional, mantida separadamente no
+repositório `DeviceLifecycle-API`. A extensão publica, em modo somente leitura,
+o CSV mais recente e o log mais recente gerados por esta automação.
+
+A API não executa ações no Active Directory, Entra ID, Intune ou Microsoft
+Graph e não é necessária para o funcionamento do `DeviceLifecycle`. O serviço
+principal continua sendo a fonte autoritativa e responsável por produzir os
+dados.
+
+A instalação recomendada é no mesmo servidor que armazena os relatórios e logs.
+Depois disso, qualquer servidor ou sistema interno autorizado pode consumir os
+dados para dashboards, inventário, monitoramento, auditoria ou outras
+integrações. O acesso é protegido por API key e por regra de firewall restrita
+aos consumidores configurados.
+
+Endpoints disponibilizados pela extensão:
+
+- CSV original: `GET /api/v1/report.csv`
+- Relatório convertido para JSON: `GET /api/v1/report`
+- Últimas linhas do log: `GET /api/v1/log?lines=500`
+- Log completo: `GET /api/v1/log/file`
+- Metadados dos arquivos: `GET /api/v1/metadata`
+- Estado do serviço: `GET /api/v1/health`
+
+Consulte o README e a documentação do repositório separado
+`DeviceLifecycle-API` para instalação, autenticação e contrato HTTP completo.
