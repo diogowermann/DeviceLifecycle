@@ -335,11 +335,11 @@ Ele remove por fases:
 ## Extensão opcional: DeviceLifecycle-API
 
 Este repositório possui uma extensão HTTP opcional, mantida separadamente no
-repositório `DeviceLifecycle-API`. A extensão publica, em modo somente leitura,
+repositório [`DeviceLifecycle-API`](https://github.com/diogowermann/DeviceLifecycle-API). A extensão publica, em modo somente leitura,
 o CSV mais recente e o log mais recente gerados por esta automação.
 
 A API não executa ações no Active Directory, Entra ID, Intune ou Microsoft
-Graph e não é necessária para o funcionamento do `DeviceLifecycle`. O serviço
+Graph e não é necessária para o funcionamento do [`DeviceLifecycle`](https://github.com/diogowermann/DeviceLifecycle-API). O serviço
 principal continua sendo a fonte autoritativa e responsável por produzir os
 dados.
 
@@ -359,4 +359,4 @@ Endpoints disponibilizados pela extensão:
 - Estado do serviço: `GET /api/v1/health`
 
 Consulte o README e a documentação do repositório separado
-`DeviceLifecycle-API` para instalação, autenticação e contrato HTTP completo.
+[`DeviceLifecycle-API`](https://github.com/diogowermann/DeviceLifecycle-API) para instalação, autenticação e contrato HTTP completo.
