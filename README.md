@@ -2,11 +2,19 @@
 
 [English](README.md) | [Português](README.pt-BR.md)
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 PowerShell automation for safely managing inactive hybrid Windows devices across Active Directory, Microsoft Entra ID, and Microsoft Intune.
 
 > **Portfolio note:** this project was designed around conservative identity correlation, staged enforcement, recoverability, and least-privilege administration.
 
 <!-- IMAGE PLACEHOLDER: Add a sanitized screenshot of the DeviceLifecycle report or execution summary here. Suggested path: docs/assets/device-lifecycle-overview.png -->
+
+## Disclaimer
+
+This project was originally designed for real-world enterprise environments. All organization-specific information, credentials, tenant identifiers, hostnames, IP addresses, certificate references, and other sensitive values must be removed or replaced before publication.
+
+The repository is provided as a technical reference and starting point, not as a substitute for environment-specific validation. Test the complete workflow in `ReportOnly` mode and within a controlled pilot scope before enabling any action that changes or removes device identities.
 
 ## Overview
 
@@ -104,6 +112,8 @@ DeviceLifecycle is intentionally conservative:
 - Destructive workflows can be simulated with `-WhatIf`.
 
 > **Important:** removing the quarantine OU from Entra Connect scope can remove devices from Entra ID immediately and bypass the intended grace period.
+
+See [SECURITY.md](SECURITY.md) for vulnerability reporting and deployment-security requirements.
 
 ## Requirements
 
@@ -276,12 +286,15 @@ The API does not execute lifecycle actions and is not required for DeviceLifecyc
 
 ```text
 DeviceLifecycle/
+|-- CHANGELOG.md
 |-- DeviceLifecycle.Config.psd1
 |-- DeviceLifecycle.Helpers.psm1
 |-- Initialize-DeviceLifecycle.ps1
 |-- Install-DeviceLifecycleTask.ps1
 |-- Invoke-DeviceLifecycle.ps1
+|-- LICENSE
 |-- Restore-QuarantinedDevice.ps1
+|-- SECURITY.md
 |-- Test-DeviceLifecycle.ps1
 |-- Uninstall-DeviceLifecycle.ps1
 |-- docs/
@@ -297,6 +310,9 @@ DeviceLifecycle/
 ## Documentation
 
 - [Architecture and engineering decisions](docs/en/ARCHITECTURE.md)
+- [Security policy](SECURITY.md)
+- [Changelog](CHANGELOG.md)
+- [MIT License](LICENSE)
 - [Documentação em português](README.pt-BR.md)
 - [DeviceLifecycle-API](https://github.com/diogowermann/DeviceLifecycle-API)
 
@@ -312,7 +328,7 @@ Search this repository for `IMAGE PLACEHOLDER` to locate every insertion point.
 
 ## License
 
-No explicit open-source license is currently included in the repository. Until a license is added, the source remains publicly visible but is not automatically granted standard reuse rights.
+DeviceLifecycle is licensed under the [MIT License](LICENSE). You may use, copy, modify, merge, publish, distribute, sublicense, and sell copies of the software under the license terms. The software is provided without warranty.
 
 ## Author
 
