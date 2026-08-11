@@ -56,21 +56,26 @@
 
     # ---- Derived paths (leave blank to auto-derive from OrganizationName) ----
 
-    # InstallRoot       → C:\ProgramData\{OrganizationName}\DeviceLifecycle
-    # StateFile          → {InstallRoot}\state.json
-    # LogDirectory       → {InstallRoot}\Logs
-    # ReportDirectory    → {InstallRoot}\Reports
-    # TaskName           → {OrganizationName} - Device Lifecycle
-    # CertificateSubjectName → CN={OrganizationName} Device Lifecycle Automation
-    # CertificateFileName    → {OrganizationName}-DeviceLifecycle.cer
+    # InstallRoot       -> C:\ProgramData\{OrganizationName}\DeviceLifecycle
+    # StateFile          -> {InstallRoot}\state.json
+    # LogDirectory       -> {InstallRoot}\Logs
+    # ReportDirectory    -> {InstallRoot}\Reports
+    # TaskName           -> {OrganizationName} - Device Lifecycle
+    # SnapshotTaskName   -> {OrganizationName} - Device Lifecycle Snapshot
+    # CertificateSubjectName -> CN={OrganizationName} Device Lifecycle Automation
+    # CertificateFileName    -> {OrganizationName}-DeviceLifecycle.cer
 
     InstallRoot = ''
     StateFile = ''
     LogDirectory = ''
     ReportDirectory = ''
 
+    # Daily lifecycle task keeps the configured Mode. The snapshot task always
+    # overrides execution to ReportOnly and uses the same cross-task lock.
     TaskName = ''
     TaskTime = '02:15'
+    SnapshotTaskName = ''
+    SnapshotIntervalMinutes = 30
 
     CertificateSubjectName = ''
     CertificateFileName = ''

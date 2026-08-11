@@ -5,8 +5,9 @@ function Resolve-DeviceLifecycleConfig {
 
     .DESCRIPTION
         Derives InstallRoot, StateFile, LogDirectory, ReportDirectory, TaskName,
-        CertificateSubjectName and CertificateFileName from the OrganizationName
-        key when the corresponding keys are empty or not present in the config.
+        SnapshotTaskName, CertificateSubjectName and CertificateFileName from the
+        OrganizationName key when the corresponding keys are empty or not present
+        in the config.
 
         Explicit values in the .psd1 always take precedence over derivation.
     #>
@@ -36,6 +37,14 @@ function Resolve-DeviceLifecycleConfig {
 
     if ([string]::IsNullOrWhiteSpace([string]$Config.TaskName)) {
         $Config.TaskName = "$org - Device Lifecycle"
+    }
+
+    if (-not $Config.ContainsKey('SnapshotTaskName') -or [string]::IsNullOrWhiteSpace([string]$Config.SnapshotTaskName)) {
+        $Config.SnapshotTaskName = "$org - Device Lifecycle Snapshot"
+    }
+
+    if (-not $Config.ContainsKey('SnapshotIntervalMinutes') -or [int]$Config.SnapshotIntervalMinutes -le 0) {
+        $Config.SnapshotIntervalMinutes = 30
     }
 
     if ([string]::IsNullOrWhiteSpace([string]$Config.CertificateSubjectName)) {
