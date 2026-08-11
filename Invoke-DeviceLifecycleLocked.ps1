@@ -47,6 +47,42 @@ if (-not (Test-Path -LiteralPath $config.InstallRoot)) {
 $lockPath = Join-Path $config.InstallRoot 'DeviceLifecycle.lock'
 $lockStream = $null
 
+# Invoke-DeviceLifecycle.ps1 has one Copy-Item call: publishing the completed
+# timestamped CSV as DeviceLifecycle-Latest.csv. Shadow that call in the child
+# scope so readers see an atomic same-directory replacement instead of a copy
+# directly over the live file.
+function Copy-Item {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$LiteralPath,
+
+        [Parameter(Mandatory)]
+        [string]$Destination,
+
+        [Parameter()]
+        [switch]$Force
+    )
+
+    $temporaryPath = $Destination + '.tmp'
+    Microsoft.PowerShell.Management\Copy-Item `
+        -LiteralPath $LiteralPath `
+        -Destination $temporaryPath `
+        -Force
+
+    if (Test-Path -LiteralPath $Destination) {
+        [System.IO.File]::Replace(
+            $temporaryPath,
+            $Destination,
+            $null,
+            $true
+        )
+    }
+    else {
+        [System.IO.File]::Move($temporaryPath, $Destination)
+    }
+}
+
 try {
     try {
         $lockStream = [System.IO.File]::Open(
