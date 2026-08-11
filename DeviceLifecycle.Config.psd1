@@ -29,6 +29,10 @@
     QuarantineAfterDays = 90
     DeleteAfterQuarantineDays = 30
     ResidualEntraDeleteAfterDays = 7
+
+    # Safety gate for lifecycle actions. Objects younger than this are still
+    # inventoried and correlated with Entra/Intune, but cannot become action
+    # candidates until the minimum age has elapsed.
     MinimumObjectAgeDays = 30
 
     # Conservative correlation. A missing or duplicated cloud record is sent
