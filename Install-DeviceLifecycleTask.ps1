@@ -33,6 +33,7 @@ if (-not (Test-Path -LiteralPath $installRoot)) {
 
 $filesToCopy = @(
     'Invoke-DeviceLifecycle.ps1',
+    'Invoke-DeviceLifecycleLocked.ps1',
     'Initialize-DeviceLifecycle.ps1',
     'Install-DeviceLifecycleTask.ps1',
     'Test-DeviceLifecycle.ps1',
@@ -56,14 +57,22 @@ else {
     Write-Warning "Existing configuration preserved: $destinationConfig"
 }
 
-$scriptPath = Join-Path $installRoot 'Invoke-DeviceLifecycle.ps1'
-$argument = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "{0}" -ConfigPath "{1}"' -f `
-    $scriptPath,
+$wrapperPath = Join-Path $installRoot 'Invoke-DeviceLifecycleLocked.ps1'
+$dailyArgument = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "{0}" -ConfigPath "{1}"' -f `
+    $wrapperPath,
+    $destinationConfig
+$snapshotArgument = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "{0}" -ConfigPath "{1}" -ModeOverride ReportOnly' -f `
+    $wrapperPath,
     $destinationConfig
 
-$action = New-ScheduledTaskAction `
+$dailyAction = New-ScheduledTaskAction `
     -Execute 'powershell.exe' `
-    -Argument $argument `
+    -Argument $dailyArgument `
+    -WorkingDirectory $installRoot
+
+$snapshotAction = New-ScheduledTaskAction `
+    -Execute 'powershell.exe' `
+    -Argument $snapshotArgument `
     -WorkingDirectory $installRoot
 
 $timeParts = ([string]$config.TaskTime).Split(':')
@@ -71,8 +80,22 @@ if ($timeParts.Count -ne 2) {
     throw "TaskTime must use HH:mm format. Current value: $($config.TaskTime)"
 }
 
+$snapshotIntervalMinutes = [int]$config.SnapshotIntervalMinutes
+if ($snapshotIntervalMinutes -le 0) {
+    throw "SnapshotIntervalMinutes must be greater than zero. Current value: $snapshotIntervalMinutes"
+}
+
 $triggerTime = Get-Date -Hour ([int]$timeParts[0]) -Minute ([int]$timeParts[1]) -Second 0
-$trigger = New-ScheduledTaskTrigger -Daily -At $triggerTime
+$dailyTrigger = New-ScheduledTaskTrigger -Daily -At $triggerTime
+
+# ScheduledTasks supports repetition on a Once trigger. Ten years gives the
+# task a bounded but operationally long repetition window; reinstalling the
+# task refreshes that window.
+$snapshotTrigger = New-ScheduledTaskTrigger `
+    -Once `
+    -At (Get-Date).AddMinutes(1) `
+    -RepetitionInterval (New-TimeSpan -Minutes $snapshotIntervalMinutes) `
+    -RepetitionDuration (New-TimeSpan -Days 3650)
 
 $principal = New-ScheduledTaskPrincipal `
     -UserId 'SYSTEM' `
@@ -88,14 +111,25 @@ $settings = New-ScheduledTaskSettingsSet `
 
 Register-ScheduledTask `
     -TaskName $config.TaskName `
-    -Action $action `
-    -Trigger $trigger `
+    -Action $dailyAction `
+    -Trigger $dailyTrigger `
     -Principal $principal `
     -Settings $settings `
     -Description 'Daily lifecycle analysis and cleanup for hybrid AD, Entra ID and Intune devices.' `
     -Force | Out-Null
 
+Register-ScheduledTask `
+    -TaskName $config.SnapshotTaskName `
+    -Action $snapshotAction `
+    -Trigger $snapshotTrigger `
+    -Principal $principal `
+    -Settings $settings `
+    -Description 'Frequent ReportOnly DeviceLifecycle snapshot for inventory consumers.' `
+    -Force | Out-Null
+
 Write-Host "Scheduled task installed: $($config.TaskName)"
+Write-Host "Snapshot task installed: $($config.SnapshotTaskName) every $snapshotIntervalMinutes minute(s)"
 Write-Host "Execution identity: NT AUTHORITY\SYSTEM (domain identity: $env:COMPUTERNAME`$)"
 Write-Host "Configuration: $destinationConfig"
-Write-Host "Current mode: $($config.Mode)"
+Write-Host "Current lifecycle mode: $($config.Mode)"
+Write-Host 'Snapshot mode: ReportOnly'
