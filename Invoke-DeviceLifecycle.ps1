@@ -513,6 +513,11 @@ try {
         else {
             $null
         }
+        $adCreatedUtc = Convert-ToUtcDate -Value $computer.whenCreated
+        $isNewComputerObject = (
+            $null -ne $adCreatedUtc -and
+            $adCreatedUtc -gt $minimumCreatedCutoff
+        )
 
         if ($computer.Name.Equals($env:COMPUTERNAME, [System.StringComparison]::OrdinalIgnoreCase)) {
             $status = 'Excluded'
@@ -566,10 +571,6 @@ try {
         elseif ([bool]$computer.Enabled -and $inQuarantine) {
             $status = 'ManualReview'
             $reason = 'EnabledInQuarantine'
-        }
-        elseif ((Convert-ToUtcDate -Value $computer.whenCreated) -gt $minimumCreatedCutoff) {
-            $status = 'Excluded'
-            $reason = 'NewComputerObject'
         }
 
         $entraMatches = @()
@@ -643,6 +644,15 @@ try {
             else {
                 $intuneDevice = $intuneMatches[0]
             }
+        }
+
+        # MinimumObjectAgeDays is a lifecycle action guard, not an inventory
+        # filter. New computer objects still receive normal Entra/Intune
+        # correlation above so downstream inventory has complete evidence.
+        if ($isNewComputerObject -and $status -notin @('Excluded', 'ManualReview')) {
+            $status = 'Excluded'
+            $recommendedAction = 'None'
+            $reason = 'NewComputerObject'
         }
 
         $adLastLogonUtc = Convert-ToUtcDate -Value $computer.LastLogonDate
@@ -933,7 +943,7 @@ try {
             EntraLastActivityUtc = $(if ($null -ne $entraLastActivityUtc) { $entraLastActivityUtc.ToString('o') } else { $null })
             IntuneLastSyncUtc = $(if ($null -ne $intuneLastSyncUtc) { $intuneLastSyncUtc.ToString('o') } else { $null })
             DaysSinceLatestActivity = $daysSinceLatestActivity
-            ADCreatedUtc = (Convert-ToUtcDate -Value $computer.whenCreated).ToString('o')
+            ADCreatedUtc = $(if ($null -ne $adCreatedUtc) { $adCreatedUtc.ToString('o') } else { $null })
             ADObjectGuid = $adObjectGuid
             ADSid = [string]$computer.SID
             ADDistinguishedName = [string]$computer.DistinguishedName
