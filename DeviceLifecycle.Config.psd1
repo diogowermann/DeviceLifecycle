@@ -35,10 +35,9 @@
     # candidates until the minimum age has elapsed.
     MinimumObjectAgeDays = 30
 
-    # Conservative correlation. A missing or duplicated cloud record is sent
-    # to manual review instead of being changed.
-    RequireEntraMatch = $true
-    RequireIntuneMatch = $true
+    # Correlation policy: a missing Entra/Intune record is treated as unavailable
+    # evidence. Ambiguous or inconsistent correlated records still require manual
+    # review, and timestamps remain required for every source that is present.
     ExcludeAutopilotDevices = $true
 
     # Hard safety brake: maximum number of devices changed in one execution.

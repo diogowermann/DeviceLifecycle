@@ -53,7 +53,7 @@ A automação não depende apenas do nome do computador.
 
 1. O SID do computador no AD é comparado com `onPremisesSecurityIdentifier` no Entra ID.
 2. O `deviceId` do Entra é comparado com `azureADDeviceId` no Intune.
-3. O resultado deve ser único e cumprir os requisitos configurados.
+3. Quando existe um registro cloud, o resultado deve ser único e cumprir as validações de consistência da identidade. A ausência de um registro cloud é tratada como evidência indisponível, não como falha de correlação.
 
 ```mermaid
 sequenceDiagram
@@ -70,7 +70,7 @@ sequenceDiagram
     DL->>DL: Avalia timestamps e proteções
 ```
 
-Uma correspondência ausente ou duplicada não é adivinhada. O registro é classificado para revisão manual.
+Um registro cloud ausente não é adivinhado nem sintetizado; essa fonte é omitida da decisão de atividade. Correspondências duplicadas, ambíguas ou inconsistentes são classificadas para revisão manual.
 
 ## Modelo de ciclo de vida
 
@@ -140,7 +140,7 @@ Nomes podem ser reutilizados, alterados ou permanecer duplicados em registros an
 
 ### Falha conservadora
 
-Incerteza resulta em `ManualReview`, não em ação destrutiva. Isso inclui registros ausentes, duplicados, timestamps vazios, objetos protegidos e situações não suportadas.
+Incerteza resulta em `ManualReview`, não em ação destrutiva. Isso inclui correspondências duplicadas ou inconsistentes, timestamps ausentes em fontes que existem, objetos protegidos e situações não suportadas. Uma fonte sem registro correlacionado é tratada como evidência indisponível e não bloqueia a avaliação pelas demais fontes.
 
 ### Estado persistente após Retire
 

@@ -31,7 +31,7 @@ Ambiguous, incomplete, duplicated, or unsafe records are sent to manual review a
 
 ## Key Features
 
-- Correlates AD, Entra ID, and Intune records using stable identifiers rather than computer names alone.
+- Correlates AD, Entra ID, and Intune records using stable identifiers rather than computer names alone. Missing cloud records are treated as unavailable evidence, while existing sources still contribute their activity timestamps.
 - Uses staged modes: `ReportOnly`, `Quarantine`, and `Enforce`.
 - Preserves operational state after an Intune `Retire` removes the managed-device record.
 - Excludes servers, domain controllers, Autopilot devices, protected objects, and configured exceptions.
@@ -85,7 +85,7 @@ stateDiagram-v2
     Removed --> CloudCleanup: residual Entra object remains
     CloudCleanup --> Completed
 
-    Attention --> ManualReview: missing or ambiguous identity
+    Attention --> ManualReview: ambiguous or inconsistent identity
     QuarantineCandidate --> ManualReview: safety check fails
 ```
 
@@ -103,7 +103,7 @@ Default thresholds are configurable. The repository currently ships with:
 DeviceLifecycle is intentionally conservative:
 
 - `ReportOnly` is the default mode.
-- Missing, duplicated, or ambiguous cloud matches are not modified.
+- Missing cloud records are treated as unavailable evidence; duplicated, ambiguous, or inconsistent matches are not modified.
 - Empty or unreliable activity timestamps are sent to `ManualReview`.
 - The execution server, Windows Server devices, domain controllers, Autopilot devices, and group exclusions are protected.
 - The quarantine OU must remain inside Microsoft Entra Connect synchronization scope.
@@ -187,8 +187,6 @@ C:\ProgramData\{OrganizationName}\DeviceLifecycle\
 Review at least these outcomes:
 
 - `ManualReview`
-- `MissingEntraMatch`
-- `MissingIntuneMatch`
 - `AmbiguousEntraMatch`
 - `AmbiguousIntuneMatch`
 - `MissingActivityTimestamp`

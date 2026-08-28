@@ -57,3 +57,76 @@ function Resolve-DeviceLifecycleConfig {
 
     return $Config
 }
+
+function Get-DeviceLifecycleActivityDecision {
+    <#
+    .SYNOPSIS
+        Classifies lifecycle activity using only sources that actually exist.
+
+    .DESCRIPTION
+        AD activity is always required. Entra and Intune activity timestamps are
+        required only when a unique, valid record was correlated in that source.
+        A missing cloud record is therefore treated as unavailable evidence, not
+        as a correlation error. Ambiguity and identity consistency checks remain
+        the responsibility of the caller before this function is invoked.
+    #>
+
+    param(
+        [Parameter()]$AdLastLogonUtc,
+        [Parameter(Mandatory)][bool]$EntraRecordPresent,
+        [Parameter()]$EntraLastActivityUtc,
+        [Parameter(Mandatory)][bool]$IntuneRecordPresent,
+        [Parameter()]$IntuneLastSyncUtc,
+        [Parameter(Mandatory)][datetime]$ReportCutoff,
+        [Parameter(Mandatory)][datetime]$QuarantineCutoff
+    )
+
+    $missingAvailableTimestamp = (
+        $null -eq $AdLastLogonUtc -or
+        ($EntraRecordPresent -and $null -eq $EntraLastActivityUtc) -or
+        ($IntuneRecordPresent -and $null -eq $IntuneLastSyncUtc)
+    )
+
+    if ($missingAvailableTimestamp) {
+        return [pscustomobject]@{
+            Status = 'ManualReview'
+            RecommendedAction = 'None'
+            Reason = 'MissingActivityTimestamp'
+        }
+    }
+
+    $allAvailableSignalsOld = (
+        $AdLastLogonUtc -le $QuarantineCutoff -and
+        (-not $EntraRecordPresent -or $EntraLastActivityUtc -le $QuarantineCutoff) -and
+        (-not $IntuneRecordPresent -or $IntuneLastSyncUtc -le $QuarantineCutoff)
+    )
+
+    if ($allAvailableSignalsOld) {
+        return [pscustomobject]@{
+            Status = 'QuarantineCandidate'
+            RecommendedAction = 'Quarantine'
+            Reason = $null
+        }
+    }
+
+    $availableDates = @(
+        $AdLastLogonUtc,
+        $(if ($EntraRecordPresent) { $EntraLastActivityUtc } else { $null }),
+        $(if ($IntuneRecordPresent) { $IntuneLastSyncUtc } else { $null })
+    ) | Where-Object { $null -ne $_ }
+
+    $latestActivityUtc = $availableDates | Sort-Object -Descending | Select-Object -First 1
+    if ($null -ne $latestActivityUtc -and $latestActivityUtc -le $ReportCutoff) {
+        return [pscustomobject]@{
+            Status = 'Warning'
+            RecommendedAction = 'Monitor'
+            Reason = 'ApproachingQuarantineThreshold'
+        }
+    }
+
+    return [pscustomobject]@{
+        Status = 'Active'
+        RecommendedAction = 'None'
+        Reason = $null
+    }
+}

@@ -20,6 +20,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Reorganized the main README around the engineering problem, architecture, safety model, rollout, recovery, and portfolio presentation.
 - Corrected and clarified the relationship between `DeviceLifecycle` and the separate `DeviceLifecycle-API` repository.
+- Changed lifecycle correlation so missing Entra ID or Intune records are treated as unavailable evidence instead of forcing `ManualReview`; ambiguous/inconsistent matches and missing timestamps on existing records remain fail-closed.
+- Added activity-policy tests covering AD-only, partial-cloud, recent-cloud, warning, and missing-timestamp scenarios.
 
 ### Security
 

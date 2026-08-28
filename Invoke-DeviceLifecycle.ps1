@@ -208,7 +208,7 @@ function Get-StateRecord {
 function New-StateRecord {
     param(
         [Parameter(Mandatory)]$Computer,
-        [Parameter(Mandatory)]$EntraDevice,
+        [Parameter()]$EntraDevice,
         [Parameter()]$IntuneDevice,
         [Parameter(Mandatory)][datetime]$QuarantinedAtUtc,
         [Parameter()]$AdLastLogonUtc,
@@ -226,8 +226,8 @@ function New-StateRecord {
         AdDeletedAtUtc = $null
         IntuneDeletedAtUtc = $null
         EntraDeletedAtUtc = $null
-        EntraObjectId = [string]$EntraDevice.Id
-        EntraDeviceId = [string]$EntraDevice.DeviceId
+        EntraObjectId = $(if ($null -ne $EntraDevice) { [string]$EntraDevice.Id } else { $null })
+        EntraDeviceId = $(if ($null -ne $EntraDevice) { [string]$EntraDevice.DeviceId } else { $null })
         IntuneManagedDeviceId = $(if ($null -ne $IntuneDevice) { [string]$IntuneDevice.Id } else { $null })
         SerialNumber = $(if ($null -ne $IntuneDevice) { [string]$IntuneDevice.SerialNumber } else { $null })
         LastKnownAdLogonUtc = $(if ($null -ne $AdLastLogonUtc) { ([datetime]$AdLastLogonUtc).ToString('o') } else { $null })
@@ -582,17 +582,11 @@ try {
                 Get-IndexValues -Index $entraBySid -Key ([string]$computer.SID)
             )
 
-            if ($entraMatches.Count -eq 0) {
-                if ([bool]$script:Config.RequireEntraMatch) {
-                    $status = 'ManualReview'
-                    $reason = 'MissingEntraMatch'
-                }
-            }
-            elseif ($entraMatches.Count -gt 1) {
+            if ($entraMatches.Count -gt 1) {
                 $status = 'ManualReview'
                 $reason = 'AmbiguousEntraMatch'
             }
-            else {
+            elseif ($entraMatches.Count -eq 1) {
                 $entraDevice = $entraMatches[0]
 
                 if (
@@ -631,10 +625,6 @@ try {
                     # A successful Retire can remove the managedDevice record.
                     # The state captured at quarantine is used for audit.
                     $intuneExpectedMissingAfterRetire = $true
-                }
-                elseif ([bool]$script:Config.RequireIntuneMatch) {
-                    $status = 'ManualReview'
-                    $reason = 'MissingIntuneMatch'
                 }
             }
             elseif ($intuneMatches.Count -gt 1) {
@@ -720,43 +710,18 @@ try {
                 }
             }
             else {
-                $missingRequiredTimestamp = (
-                    $null -eq $adLastLogonUtc -or
-                    ([bool]$script:Config.RequireEntraMatch -and $null -eq $entraLastActivityUtc) -or
-                    ([bool]$script:Config.RequireIntuneMatch -and $null -eq $intuneLastSyncUtc)
-                )
+                $activityDecision = Get-DeviceLifecycleActivityDecision `
+                    -AdLastLogonUtc $adLastLogonUtc `
+                    -EntraRecordPresent:($null -ne $entraDevice) `
+                    -EntraLastActivityUtc $entraLastActivityUtc `
+                    -IntuneRecordPresent:($null -ne $intuneDevice) `
+                    -IntuneLastSyncUtc $intuneLastSyncUtc `
+                    -ReportCutoff $reportCutoff `
+                    -QuarantineCutoff $quarantineCutoff
 
-                if ($missingRequiredTimestamp) {
-                    $status = 'ManualReview'
-                    $reason = 'MissingActivityTimestamp'
-                }
-                else {
-                    $allRequiredSignalsOld = (
-                        $adLastLogonUtc -le $quarantineCutoff -and
-                        (
-                            -not [bool]$script:Config.RequireEntraMatch -or
-                            $entraLastActivityUtc -le $quarantineCutoff
-                        ) -and
-                        (
-                            -not [bool]$script:Config.RequireIntuneMatch -or
-                            $intuneLastSyncUtc -le $quarantineCutoff
-                        )
-                    )
-
-                    if ($allRequiredSignalsOld) {
-                        $status = 'QuarantineCandidate'
-                        $recommendedAction = 'Quarantine'
-                    }
-                    elseif ($null -ne $latestActivityUtc -and $latestActivityUtc -le $reportCutoff) {
-                        $status = 'Warning'
-                        $recommendedAction = 'Monitor'
-                        $reason = 'ApproachingQuarantineThreshold'
-                    }
-                    else {
-                        $status = 'Active'
-                        $recommendedAction = 'None'
-                    }
-                }
+                $status = [string]$activityDecision.Status
+                $recommendedAction = [string]$activityDecision.RecommendedAction
+                $reason = $activityDecision.Reason
             }
         }
 
@@ -767,7 +732,7 @@ try {
             if (-not (Test-ActionBudget)) {
                 $actionTaken = 'SkippedSafetyLimit'
             }
-            elseif ($PSCmdlet.ShouldProcess($computer.Name, 'Retire in Intune, disable and move to quarantine in AD')) {
+            elseif ($PSCmdlet.ShouldProcess($computer.Name, 'Retire in Intune when present, disable and move to quarantine in AD')) {
                 $anyChangeApplied = $false
                 $adChangeApplied = $false
                 $changeCounted = $false
@@ -907,8 +872,13 @@ try {
                         $changeCounted = $true
                     }
 
-                    $actionTaken = 'DeletedFromADAndIntune'
-                    Write-Log -Level INFO -Message "Device deleted from AD and Intune: $($computer.Name)."
+                    $actionTaken = if ($null -ne $intuneDevice -or $intuneExpectedMissingAfterRetire) {
+                        'DeletedFromADAndIntune'
+                    }
+                    else {
+                        'DeletedFromAD'
+                    }
+                    Write-Log -Level INFO -Message "Device final deletion completed: $($computer.Name)."
                 }
                 catch {
                     $actionError = $_.Exception.Message

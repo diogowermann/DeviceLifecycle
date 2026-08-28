@@ -31,7 +31,7 @@ Registros ambíguos, incompletos, duplicados ou inseguros são enviados para rev
 
 ## Principais recursos
 
-- Correlação entre AD, Entra ID e Intune usando identificadores estáveis, não apenas o nome do computador.
+- Correlação entre AD, Entra ID e Intune usando identificadores estáveis, não apenas o nome do computador. Registros cloud ausentes são tratados como evidência indisponível, enquanto fontes existentes continuam contribuindo com seus timestamps de atividade.
 - Modos progressivos: `ReportOnly`, `Quarantine` e `Enforce`.
 - Estado persistente após um `Retire` do Intune remover o registro do dispositivo gerenciado.
 - Exclusão automática de servidores, controladores de domínio, dispositivos Autopilot, objetos protegidos e exceções configuradas.
@@ -85,7 +85,7 @@ stateDiagram-v2
     Removido --> LimpezaNuvem: objeto residual no Entra
     LimpezaNuvem --> Concluido
 
-    Atencao --> RevisaoManual: identidade ausente ou ambígua
+    Atencao --> RevisaoManual: identidade ambígua ou inconsistente
     CandidatoQuarentena --> RevisaoManual: proteção de segurança acionada
 ```
 
@@ -103,7 +103,7 @@ Os limites são configuráveis. O repositório utiliza por padrão:
 O DeviceLifecycle adota uma abordagem conservadora:
 
 - `ReportOnly` é o modo padrão.
-- Correspondências ausentes, duplicadas ou ambíguas não são modificadas.
+- Registros cloud ausentes são tratados como evidência indisponível; correspondências duplicadas, ambíguas ou inconsistentes não são modificadas.
 - Timestamps vazios ou não confiáveis são enviados para `ManualReview`.
 - Servidor de execução, Windows Server, controladores de domínio, dispositivos Autopilot e exceções por grupo são protegidos.
 - A OU de quarentena deve permanecer no escopo de sincronização do Microsoft Entra Connect.
@@ -187,8 +187,6 @@ C:\ProgramData\{OrganizationName}\DeviceLifecycle\
 Revise especialmente:
 
 - `ManualReview`
-- `MissingEntraMatch`
-- `MissingIntuneMatch`
 - `AmbiguousEntraMatch`
 - `AmbiguousIntuneMatch`
 - `MissingActivityTimestamp`
