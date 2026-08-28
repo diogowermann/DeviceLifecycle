@@ -53,7 +53,7 @@ The automation avoids matching devices by display name alone.
 
 1. The AD computer SID is matched against `onPremisesSecurityIdentifier` in Microsoft Entra ID.
 2. The Entra `deviceId` is matched against `azureADDeviceId` in Intune.
-3. The result must be unique and must satisfy the configured matching requirements.
+3. When a cloud record exists, the result must be unique and satisfy the identity-consistency checks. A missing cloud record is treated as unavailable evidence rather than a correlation failure.
 
 ```mermaid
 sequenceDiagram
@@ -70,7 +70,7 @@ sequenceDiagram
     DL->>DL: Evaluate timestamps and safety controls
 ```
 
-A missing or duplicated match is not silently guessed. It is classified for manual review.
+A missing cloud record is not guessed or synthesized; that source is omitted from the activity decision. Duplicated, ambiguous, or inconsistent matches are classified for manual review.
 
 ## Lifecycle State Model
 
@@ -142,7 +142,7 @@ Computer names can be reused, renamed, duplicated in stale records, or represent
 
 ### Conservative failure behavior
 
-Uncertainty results in `ManualReview`, not a destructive fallback. This includes missing matches, duplicate matches, missing activity timestamps, protected objects, and unsupported records.
+Uncertainty results in `ManualReview`, not a destructive fallback. This includes duplicate or inconsistent matches, missing activity timestamps for sources that exist, protected objects, and unsupported records. A source with no correlated record is treated as unavailable evidence and does not block lifecycle evaluation from the remaining sources.
 
 ### Persistent state after Retire
 
