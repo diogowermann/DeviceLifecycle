@@ -4,74 +4,46 @@
 
 [![Licença: MIT](https://img.shields.io/badge/Licen%C3%A7a-MIT-yellow.svg)](LICENSE)
 
-Automação em PowerShell para gerenciar com segurança o ciclo de vida de dispositivos Windows híbridos entre Active Directory, Microsoft Entra ID e Microsoft Intune.
+Automação em PowerShell para gerenciar com segurança o ciclo de vida de dispositivos Windows entre Active Directory, Microsoft Entra ID e Microsoft Intune.
 
-> **Contexto de portfólio:** o projeto foi desenvolvido com foco em correlação conservadora de identidades, ativação por etapas, recuperação e princípio do menor privilégio.
-
-<!-- IMAGE PLACEHOLDER: Adicionar aqui uma captura sanitizada do relatório ou resumo de execução do DeviceLifecycle. Caminho sugerido: docs/assets/device-lifecycle-overview.png -->
-
-## Aviso e responsabilidade de implantação
-
-Este projeto foi originalmente desenvolvido para ambientes corporativos reais. Todas as informações específicas da organização, credenciais, identificadores de tenant, hostnames, endereços IP, referências de certificados e outros valores sensíveis devem ser removidos ou substituídos antes da publicação.
-
-O repositório é fornecido como referência técnica e ponto de partida, não como substituto para a validação específica de cada ambiente. Teste o fluxo completo em `ReportOnly` e dentro de um escopo piloto controlado antes de habilitar qualquer ação que altere ou remova identidades de dispositivos.
+> **Estado atual:** validado em produção com `ReportOnly`, simulação `Enforce -WhatIf` e execução controlada em `Enforce`.
 
 ## Visão geral
 
-Dispositivos Windows híbridos podem permanecer registrados no Active Directory, Microsoft Entra ID e Microsoft Intune mesmo depois de deixarem de ser utilizados. A remoção manual é demorada e arriscada, pois identidades e timestamps de atividade podem divergir entre as plataformas.
+Dispositivos Windows podem permanecer registrados por muito tempo no Active Directory, Entra ID e Intune depois de deixarem de ser utilizados. Esses registros nem sempre existem ou são atualizados ao mesmo tempo, portanto uma política segura de ciclo de vida não pode depender apenas do nome do computador nem exigir que todas as fontes estejam presentes.
 
-O DeviceLifecycle correlaciona os registros dos três sistemas, avalia múltiplos sinais de atividade e conduz os dispositivos por um processo controlado:
+O DeviceLifecycle usa o Active Directory como fonte local autoritativa, correlaciona registros cloud quando eles existem e avalia somente os sinais de atividade realmente disponíveis e confiáveis.
 
-1. relatório;
-2. quarentena;
-3. exclusão definitiva;
-4. limpeza de objetos residuais na nuvem.
+O fluxo possui três modos:
 
-Registros ambíguos, incompletos, duplicados ou inseguros são enviados para revisão manual e não são modificados automaticamente.
+- `ReportOnly`: inventaria, classifica e gera evidências sem alterações administrativas;
+- `Quarantine`: executa contenção reversível e preserva o estado do ciclo de vida;
+- `Enforce`: inclui quarentena e permite remoção definitiva depois dos períodos configurados de retenção.
 
-## Principais recursos
+## Política de correlação atual
 
-- Correlação entre AD, Entra ID e Intune usando identificadores estáveis, não apenas o nome do computador. Registros cloud ausentes são tratados como evidência indisponível, enquanto fontes existentes continuam contribuindo com seus timestamps de atividade.
-- Modos progressivos: `ReportOnly`, `Quarantine` e `Enforce`.
-- Estado persistente após um `Retire` do Intune remover o registro do dispositivo gerenciado.
-- Exclusão automática de servidores, controladores de domínio, dispositivos Autopilot, objetos protegidos e exceções configuradas.
-- Limite máximo configurável de alterações por execução.
-- Geração de relatórios CSV e logs operacionais.
-- Suporte a `-WhatIf` para simulação segura.
-- Execução opcional de Delta Sync do Microsoft Entra Connect após mudanças.
-- Script de recuperação para dispositivos em quarentena.
-- Extensão HTTP opcional e somente leitura por meio do [DeviceLifecycle-API](https://github.com/diogowermann/DeviceLifecycle-API).
+A política de decisão distingue **fonte ausente** de **fonte inconsistente**.
 
-## Arquitetura
+1. O objeto do Active Directory é sempre necessário e seu timestamp de atividade é obrigatório.
+2. Se existir exatamente um dispositivo correspondente no Entra ID, ele participa da decisão e seu timestamp de atividade deve ser válido.
+3. Se existir exatamente um registro correspondente no Intune, ele também participa da decisão e seu timestamp deve ser válido.
+4. Se não existir registro no Entra ID ou Intune, essa fonte é tratada como evidência indisponível e não bloqueia o ciclo de vida.
+5. Se houver múltiplas correspondências, inconsistência de identidade ou timestamp ausente em uma fonte que existe, o dispositivo vai para `ManualReview`.
+6. Uma falha de consulta ao Graph é tratada de forma diferente de uma resposta válida com zero registros e mantém o comportamento fail-closed.
 
-```mermaid
-flowchart LR
-    AD[Active Directory] --> APP[DeviceLifecycle]
-    GRAPH[Microsoft Graph] --> APP
-    ENTRA[Microsoft Entra ID] --> GRAPH
-    INTUNE[Microsoft Intune] --> GRAPH
+Exemplos:
 
-    APP --> REPORTS[Relatórios CSV]
-    APP --> LOGS[Logs de execução]
-    APP --> STATE[Estado persistente state.json]
+| Evidência disponível | Resultado da avaliação |
+|---|---|
+| AD antigo; Entra ausente; Intune ausente | Usa somente o AD |
+| AD antigo; Entra antigo; Intune ausente | Usa AD + Entra |
+| AD antigo; Entra antigo; Intune antigo | Usa as três fontes |
+| AD antigo; Entra recente | Permanece ativo |
+| AD antigo; Intune recente | Permanece ativo |
+| Fonte existente sem timestamp confiável | `ManualReview` |
+| Correspondência duplicada ou inconsistente | `ManualReview` |
 
-    REPORTS --> API[DeviceLifecycle-API]
-    LOGS --> API
-    API --> CONSUMERS[Dashboards / Monitoramento / Integrações]
-```
-
-A correlação de identidade segue esta cadeia:
-
-```mermaid
-flowchart LR
-    A[SID do computador no AD] -->|onPremisesSecurityIdentifier| E[Dispositivo no Entra]
-    E -->|deviceId| I[Dispositivo gerenciado no Intune]
-    I -->|azureADDeviceId| E
-```
-
-<!-- IMAGE PLACEHOLDER: Adicionar aqui um diagrama sanitizado da arquitetura ou uma captura do fluxo de execução. Caminho sugerido: docs/assets/architecture.png -->
-
-Consulte [Arquitetura](docs/pt-BR/ARCHITECTURE.md) para detalhes sobre ciclo de vida, limites de confiança e decisões de engenharia.
+Essa política evita manter computadores antigos indefinidamente em revisão manual apenas porque um registro cloud não existe, sem enfraquecer as validações quando a fonte está presente.
 
 ## Ciclo de vida
 
@@ -79,17 +51,17 @@ Consulte [Arquitetura](docs/pt-BR/ARCHITECTURE.md) para detalhes sobre ciclo de 
 stateDiagram-v2
     [*] --> Ativo
     Ativo --> Atencao: inatividade >= ReportAfterDays
-    Atencao --> CandidatoQuarentena: todos os sinais excedem o limite
-    CandidatoQuarentena --> EmQuarentena: modo Quarantine ou Enforce
-    EmQuarentena --> Removido: período de quarentena concluído
-    Removido --> LimpezaNuvem: objeto residual no Entra
+    Atencao --> CandidatoQuarentena: todos os sinais disponíveis excedem o limite
+    CandidatoQuarentena --> EmQuarentena: Quarantine ou Enforce
+    EmQuarentena --> Removido: DeleteAfterQuarantineDays
+    Removido --> LimpezaNuvem: objeto residual permanece
     LimpezaNuvem --> Concluido
 
-    Atencao --> RevisaoManual: identidade ambígua ou inconsistente
+    Atencao --> RevisaoManual: identidade ambígua/inconsistente
     CandidatoQuarentena --> RevisaoManual: proteção de segurança acionada
 ```
 
-Os limites são configuráveis. O repositório utiliza por padrão:
+Padrões atuais:
 
 | Etapa | Padrão |
 |---|---:|
@@ -98,40 +70,67 @@ Os limites são configuráveis. O repositório utiliza por padrão:
 | Exclusão definitiva | 30 dias adicionais em quarentena |
 | Limpeza residual no Entra | 7 dias após exclusão no AD |
 
-## Modelo de segurança
+## Modelo de execução agendada
 
-O DeviceLifecycle adota uma abordagem conservadora:
+O instalador registra **duas tarefas separadas**.
 
-- `ReportOnly` é o modo padrão.
-- Registros cloud ausentes são tratados como evidência indisponível; correspondências duplicadas, ambíguas ou inconsistentes não são modificadas.
-- Timestamps vazios ou não confiáveis são enviados para `ManualReview`.
-- Servidor de execução, Windows Server, controladores de domínio, dispositivos Autopilot e exceções por grupo são protegidos.
-- A OU de quarentena deve permanecer no escopo de sincronização do Microsoft Entra Connect.
-- A limpeza final no Entra ocorre apenas depois da exclusão do objeto no AD.
-- `MaximumActionsPerRun` funciona como freio operacional rígido.
-- Fluxos destrutivos podem ser simulados com `-WhatIf`.
+### `{OrganizationName} - Device Lifecycle`
 
-> **Importante:** retirar a OU de quarentena do escopo do Entra Connect pode remover dispositivos do Entra ID imediatamente e eliminar o período de carência previsto.
+Tarefa principal do ciclo de vida.
 
-Consulte [SECURITY.md](SECURITY.md) para as orientações de reporte de vulnerabilidades e os requisitos de segurança da implantação.
+- executa diariamente no horário definido em `TaskTime`;
+- usa o modo configurado em `Mode` (`ReportOnly`, `Quarantine` ou `Enforce`);
+- pode alterar AD, Intune e Entra conforme a etapa e as proteções aplicáveis;
+- roda como `NT AUTHORITY\SYSTEM`.
+
+### `{OrganizationName} - Device Lifecycle Snapshot`
+
+Tarefa de observabilidade e inventário.
+
+- executa em intervalo definido por `SnapshotIntervalMinutes`;
+- o padrão é 30 minutos;
+- força `-ModeOverride ReportOnly` independentemente do modo operacional principal;
+- mantém `DeviceLifecycle-Latest.csv` atualizado para auditoria, dashboards e integrações;
+- nunca executa ações de lifecycle.
+
+As duas tarefas usam `Invoke-DeviceLifecycleLocked.ps1`, evitando execuções concorrentes do mesmo processo.
+
+## Segurança
+
+O projeto mantém controles de segurança explícitos:
+
+- `ReportOnly` continua sendo o modo padrão de implantação;
+- ausência de registro cloud não é tratada como inconsistência;
+- correspondências duplicadas, ambíguas ou incompatíveis permanecem em `ManualReview`;
+- timestamps vazios em fontes existentes permanecem em `ManualReview`;
+- objetos protegidos e exceções configuradas não são alterados;
+- `MaximumActionsPerRun` limita o impacto operacional por execução;
+- caminhos destrutivos suportam PowerShell `-WhatIf`;
+- a exclusão final ocorre somente após a janela de quarentena;
+- a limpeza residual no Entra ocorre somente após a exclusão do objeto no AD;
+- o estado persistente permite continuar o lifecycle mesmo depois que um `Retire` remove o registro do Intune.
+
+Consulte [SECURITY.md](SECURITY.md) e [Arquitetura](docs/pt-BR/ARCHITECTURE.md).
 
 ## Requisitos
 
-- Windows Server hospedando o Microsoft Entra Connect Sync.
-- Windows PowerShell 5.1.
-- Módulo PowerShell do Active Directory.
-- Módulos Microsoft Graph usados pelo projeto.
-- Permissões para criar e administrar a OU de quarentena e o grupo de exclusão.
-- App Registration no Microsoft Entra com autenticação por certificado.
-- Permissões de aplicação no Microsoft Graph:
-  - `Device.ReadWrite.All`
-  - `DeviceManagementManagedDevices.ReadWrite.All`
-  - `DeviceManagementManagedDevices.PrivilegedOperations.All`
-  - `DeviceManagementServiceConfig.Read.All`
+- Windows Server com Windows PowerShell 5.1;
+- módulo PowerShell do Active Directory;
+- módulos Microsoft Graph usados pelo projeto;
+- App Registration no Microsoft Entra com autenticação por certificado;
+- permissões administrativas delegadas somente no escopo necessário;
+- OU de quarentena dentro do escopo de sincronização do Microsoft Entra Connect quando o ambiente utilizar Hybrid Join.
+
+Permissões de aplicação usadas pelo projeto:
+
+- `Device.ReadWrite.All`
+- `DeviceManagementManagedDevices.ReadWrite.All`
+- `DeviceManagementManagedDevices.PrivilegedOperations.All`
+- `DeviceManagementServiceConfig.Read.All`
 
 ## Início rápido
 
-### 1. Configurar a organização
+### 1. Configurar
 
 Edite `DeviceLifecycle.Config.psd1`:
 
@@ -144,22 +143,14 @@ ClientId = 'SEU-CLIENT-ID'
 CertificateThumbprint = 'THUMBPRINT-DO-CERTIFICADO-LOCAL-MACHINE'
 ```
 
-`OrganizationName` é usado para derivar caminhos, nomes de tarefa e identificadores do certificado.
-
-### 2. Inicializar dependências e objetos do AD
-
-Execute o PowerShell como administrador:
+### 2. Inicializar
 
 ```powershell
-Set-ExecutionPolicy Bypass -Scope Process -Force
-
 .\Initialize-DeviceLifecycle.ps1 `
     -InstallModules `
     -CreateAdObjects `
     -CreateCertificate
 ```
-
-Envie o certificado público gerado para a App Registration e copie o thumbprint para o arquivo de configuração.
 
 ### 3. Validar o ambiente
 
@@ -167,78 +158,62 @@ Envie o certificado público gerado para a App Registration e copie o thumbprint
 .\Test-DeviceLifecycle.ps1
 ```
 
-Todos os testes necessários devem retornar `True` antes da ativação dos modos de alteração.
-
-### 4. Executar o primeiro inventário
+### 4. Executar o inventário inicial
 
 ```powershell
-.\Invoke-DeviceLifecycle.ps1
+.\Invoke-DeviceLifecycle.ps1 -ModeOverride ReportOnly
 ```
 
-Relatórios e logs são gravados em:
-
-```text
-C:\ProgramData\{OrganizationName}\DeviceLifecycle\
-|-- Reports\
-|-- Logs\
-`-- state.json
-```
-
-Revise especialmente:
+Revise principalmente:
 
 - `ManualReview`
 - `AmbiguousEntraMatch`
 - `AmbiguousIntuneMatch`
 - `MissingActivityTimestamp`
+- `Warning`
 - `QuarantineCandidate`
 
-<!-- IMAGE PLACEHOLDER: Adicionar aqui uma captura sanitizada do CSV mostrando as colunas de resultado/revisão. Caminho sugerido: docs/assets/report-example.png -->
-
-### 5. Instalar a tarefa agendada
+### 5. Instalar as tarefas
 
 ```powershell
-.\Install-DeviceLifecycleTask.ps1 -ForceConfig
+.\Install-DeviceLifecycleTask.ps1
 ```
 
-O horário padrão de execução é `02:15`.
+Em uma instalação já existente, o instalador preserva a configuração operacional por padrão. Use `-ForceConfig` somente quando quiser substituir deliberadamente o arquivo instalado pelo template fornecido ao instalador.
 
-## Implantação recomendada
+## Ativação de Enforce
 
-### Fase 1 — Somente relatório
-
-Mantenha por pelo menos duas semanas:
+A sequência recomendada antes de produção é:
 
 ```powershell
-Mode = 'ReportOnly'
+.\Invoke-DeviceLifecycle.ps1 -ModeOverride ReportOnly
+.\Invoke-DeviceLifecycle.ps1 -ModeOverride Enforce -WhatIf
+.\Invoke-DeviceLifecycle.ps1 -ModeOverride Enforce
 ```
 
-### Fase 2 — Quarentena
-
-Depois de validar os candidatos e testar a recuperação:
-
-```powershell
-Mode = 'Quarantine'
-```
-
-Esse modo executa `Retire` no Intune, desabilita o computador no AD e move o objeto para a OU de quarentena. Não há exclusão definitiva.
-
-### Fase 3 — Aplicação completa
-
-Depois de testar a recuperação e confirmar a disponibilidade das chaves BitLocker:
+Depois de revisar o primeiro lote alterado e confirmar o comportamento esperado, configure:
 
 ```powershell
 Mode = 'Enforce'
 ```
 
+A tarefa principal passa a executar o lifecycle completo no horário configurado, enquanto a tarefa de snapshot continua isolada em `ReportOnly`.
+
+### Validação de produção
+
+Em 28 de agosto de 2026, a política de correlação opcional de Entra ID/Intune foi validada em ambiente real. O snapshot `ReportOnly` classificou corretamente dispositivos antigos sem registros cloud como candidatos ao lifecycle, `Enforce -WhatIf` apresentou apenas as ações esperadas e a primeira execução controlada em `Enforce` concluiu a quarentena do lote permitido sem depender da existência de registros no Entra ID ou Intune.
+
+Os detalhes quantitativos e identificadores do ambiente não são versionados no repositório público.
+
 ## Recuperação
 
-Simular a recuperação:
+Simular:
 
 ```powershell
 .\Restore-QuarantinedDevice.ps1 -ComputerName NOME-DO-DISPOSITIVO -WhatIf
 ```
 
-Executar a recuperação:
+Executar:
 
 ```powershell
 .\Restore-QuarantinedDevice.ps1 -ComputerName NOME-DO-DISPOSITIVO
@@ -246,41 +221,11 @@ Executar a recuperação:
 
 Um `Retire` concluído no Intune pode exigir novo enrollment após a restauração.
 
-## Simulação
+## DeviceLifecycle-API
 
-```powershell
-.\Invoke-DeviceLifecycle.ps1 -ModeOverride Enforce -WhatIf
-```
+O [DeviceLifecycle-API](https://github.com/diogowermann/DeviceLifecycle-API) é uma extensão separada, opcional e somente leitura. Ela publica os relatórios e logs gerados pelo DeviceLifecycle para consumidores autorizados, sem possuir endpoints de quarentena, exclusão ou restauração.
 
-## Desinstalação
-
-Visualizar a remoção completa:
-
-```powershell
-.\Uninstall-DeviceLifecycle.ps1 -WhatIf
-```
-
-Remoção interativa:
-
-```powershell
-.\Uninstall-DeviceLifecycle.ps1
-```
-
-Remoção não interativa:
-
-```powershell
-.\Uninstall-DeviceLifecycle.ps1 -Force
-```
-
-Faça backup dos relatórios e logs antes da desinstalação. O diretório operacional e seu histórico podem ser removidos permanentemente.
-
-## Extensão opcional de API
-
-O [DeviceLifecycle-API](https://github.com/diogowermann/DeviceLifecycle-API) é uma extensão separada, opcional e somente leitura, que publica o relatório CSV e o log mais recentes por endpoints HTTP autenticados.
-
-A API não executa ações de ciclo de vida e não é necessária para o funcionamento do DeviceLifecycle. O serviço principal continua sendo a fonte autoritativa dos relatórios, logs e estado.
-
-## Estrutura do projeto
+## Estrutura principal
 
 ```text
 DeviceLifecycle/
@@ -290,17 +235,16 @@ DeviceLifecycle/
 |-- Initialize-DeviceLifecycle.ps1
 |-- Install-DeviceLifecycleTask.ps1
 |-- Invoke-DeviceLifecycle.ps1
-|-- LICENSE
+|-- Invoke-DeviceLifecycleLocked.ps1
 |-- Restore-QuarantinedDevice.ps1
-|-- SECURITY.md
 |-- Test-DeviceLifecycle.ps1
 |-- Uninstall-DeviceLifecycle.ps1
+|-- SECURITY.md
+|-- tests/
+|   `-- Test-ActivityCorrelationPolicy.ps1
 |-- docs/
-|   |-- en/
-|   |   `-- ARCHITECTURE.md
-|   |-- pt-BR/
-|   |   `-- ARCHITECTURE.md
-|   `-- assets/
+|   |-- en/ARCHITECTURE.md
+|   `-- pt-BR/ARCHITECTURE.md
 |-- README.md
 `-- README.pt-BR.md
 ```
@@ -310,23 +254,12 @@ DeviceLifecycle/
 - [Arquitetura e decisões de engenharia](docs/pt-BR/ARCHITECTURE.md)
 - [Política de segurança](SECURITY.md)
 - [Histórico de alterações](CHANGELOG.md)
-- [Licença MIT](LICENSE)
 - [English documentation](README.md)
 - [DeviceLifecycle-API](https://github.com/diogowermann/DeviceLifecycle-API)
 
-## Imagens planejadas para o portfólio
-
-Os pontos abaixo foram deixados intencionalmente marcados para receber capturas sanitizadas:
-
-- visão geral da execução ou relatório;
-- arquitetura ou fluxo do ciclo de vida;
-- exemplo sanitizado do relatório CSV.
-
-Pesquise por `IMAGE PLACEHOLDER` no repositório para localizar todos os pontos de inserção.
-
 ## Licença
 
-O DeviceLifecycle é distribuído sob a [Licença MIT](LICENSE). É permitido usar, copiar, modificar, mesclar, publicar, distribuir, sublicenciar e vender cópias do software conforme os termos da licença. O software é fornecido sem garantia.
+O DeviceLifecycle é distribuído sob a [Licença MIT](LICENSE).
 
 ## Autor
 
