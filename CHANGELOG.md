@@ -25,6 +25,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Documented the split scheduled-execution model: the primary lifecycle task uses the configured mode, while the frequent snapshot task always forces `ReportOnly`.
 - Documented the recommended production promotion sequence using `ReportOnly`, `Enforce -WhatIf`, a controlled `Enforce` run, and only then persistent `Mode = 'Enforce'`.
 - Updated public documentation to reflect successful production validation of the optional cloud-correlation behavior without publishing environment-specific device identifiers or counts.
+- Fixed atomic publication of `DeviceLifecycle-Latest.csv` under Windows PowerShell 5.1 by passing a true CLR null backup filename to `System.IO.File.Replace` instead of a PowerShell `$null` value that can be coerced to an empty string.
 
 ### Security
 
