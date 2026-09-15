@@ -71,10 +71,13 @@ function Copy-Item {
         -Force
 
     if (Test-Path -LiteralPath $Destination) {
+        # Windows PowerShell 5.1 can coerce $null to String.Empty when calling a
+        # .NET method with a String parameter. File.Replace then treats the empty
+        # backup filename as an invalid path. NullString passes an actual CLR null.
         [System.IO.File]::Replace(
             $temporaryPath,
             $Destination,
-            $null,
+            [System.Management.Automation.Language.NullString]::Value,
             $true
         )
     }
